@@ -42,3 +42,6 @@ java-generated/
 
 ### Secrets locaux (identifiants de la base) : jamais dans Git ###
 .env
+
+### Rapports de tests (produits par scripts/run-tests.sh) ###
+test-results/
