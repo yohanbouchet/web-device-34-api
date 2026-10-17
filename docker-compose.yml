@@ -3,7 +3,8 @@
 # Rôle        : lancer l'API Spring Boot et sa base PostgreSQL ensemble ;
 #               l'API répond sur http://localhost:8080 (routes sous /api)
 # Utilise     : Dockerfile (image de l'API), database/Dockerfile (image de la
-#               base sans gosu), .env (identifiants, non commité → .env.example)
+#               base sans gosu), .env (identifiants, non commité
+#               → modèle : .env.example)
 # Utilisé par : la commande docker compose up -d (exercice 1)
 # =============================================================================
 
@@ -12,12 +13,14 @@ services:
   app:
     # Construit l'image avec le Dockerfile du dossier courant
     build: .
-    # Nom de l'image construite (":local" = construite sur le poste, pas par la CI)
+    # Nom de l'image construite
+    # (":local" = construite sur le poste, pas par la CI)
     image: workshop-organizer:local
     # Port de la machine : port du conteneur → http://localhost:8080
     ports:
       - "8080:8080"
-    # Connexion à la base, valeurs lues dans .env ("db" = nom du service ci-dessous)
+    # Connexion à la base, valeurs lues dans .env
+    # ("db" = nom du service ci-dessous)
     # ":?" → Compose refuse de démarrer si la variable manque dans .env
     environment:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://db:5432/${POSTGRES_DB:?is not set, see .env.example}"
@@ -30,12 +33,14 @@ services:
     # Relance automatique en cas de plantage, sauf arrêt volontaire
     restart: unless-stopped
 
-  # La base PostgreSQL : non publiée sur la machine, joignable par l'API seulement
+  # La base PostgreSQL : non publiée sur la machine,
+  # joignable par l'API seulement
   db:
     # Notre image : l'officielle 18.6 sans gosu (database/Dockerfile)
     build: ./database
     image: workshop-organizer-db:18.6
-    # Création de l'utilisateur et de la base au 1er démarrage (POSTGRES_* du .env)
+    # Création de l'utilisateur et de la base au 1er démarrage
+    # (variables POSTGRES_* du .env)
     env_file: .env
     # Persistance : les données vivent dans le volume, pas dans le conteneur
     # (depuis PostgreSQL 18, on monte /var/lib/postgresql et non plus .../data)
@@ -51,6 +56,7 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-# Volume nommé géré par Docker : survit à "docker compose down" (pas à "down -v")
+# Volume nommé géré par Docker : survit à "docker compose down"
+# (mais pas à "docker compose down -v")
 volumes:
   db-data:

@@ -1,9 +1,11 @@
 # =============================================================================
 # Fichier     : Dockerfile
 # Rôle        : construire l'image de l'API Spring Boot (Workshop Organizer)
-#               en deux étages : compilation avec JDK + Gradle, exécution avec JRE
+#               en deux étages : compilation avec JDK + Gradle,
+#               exécution avec JRE
 # Utilise     : gradlew, gradle/, build.gradle, settings.gradle, src/
-# Utilisé par : docker-compose.yml (exercice 1), pipeline GitLab CI (exercice 2)
+# Utilisé par : docker-compose.yml (exercice 1),
+#               pipeline GitLab CI (exercice 2)
 # =============================================================================
 
 # ---------- Étage 1 : construction (l'atelier) ----------
