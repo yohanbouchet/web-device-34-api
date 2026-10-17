@@ -18,7 +18,7 @@ Workshops play a crucial role in fostering learning and collaboration. Our appli
 ## Technical Overview
 
 - **Java Development Kit (JDK):** We use **JDK 21**, tested with **Adoptium**, to power our application.
-- **Database:** Our backend relies on a **PostgreSQL 13** database for data storage.
+- **Database:** Our backend relies on a **PostgreSQL 18** database for data storage.
 - **Build Tool:** We leverage **Gradle 8.7** for managing dependencies and building the project.
 - **Spring Boot:** Our application is based on **Spring Boot 3.2.4**, which provides a robust framework for creating RESTful APIs.
 - **Application Server:** Our application can run on Tomcat server that require version 10.1.24.
@@ -42,11 +42,31 @@ To compile and run the application locally, follow these steps:
    ```
    For production, package the application as WAR and use a tomcat server
 
-To run correctly the application with docker after you building it with tag workshop-organizer, run the following
+## Running with Docker Compose
 
-```bash
-docker compose up -d
-```
+The stack runs two containers: the API (`app`, JRE image, non-root user) and
+PostgreSQL 18 (`db`, official image without `gosu`, non-root user).
+
+1. Create your local environment file (never committed, see `.gitignore`):
+   ```bash
+   cp .env.example .env
+   sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
+   ```
+2. Build and start the stack:
+   ```bash
+   docker compose up -d
+   ```
+   The API waits until the database is healthy (`pg_isready` health check).
+3. Check the API:
+   - Swagger UI: http://localhost:8080
+   - Example endpoint: http://localhost:8080/api/notions
+
+Notes:
+- The database port is not published on the host: only the API can reach it.
+- Data is stored in the `db-data` volume: `docker compose down` keeps it,
+  `docker compose down -v` deletes it.
+- Use `docker compose config --quiet` to validate the file: without `--quiet`,
+  the resolved password is printed.
 
 ## Configuration
 

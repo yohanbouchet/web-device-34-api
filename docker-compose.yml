@@ -1,17 +1,56 @@
-services:
+# =============================================================================
+# Fichier     : docker-compose.yml
+# Rôle        : lancer l'API Spring Boot et sa base PostgreSQL ensemble ;
+#               l'API répond sur http://localhost:8080 (routes sous /api)
+# Utilise     : Dockerfile (image de l'API), database/Dockerfile (image de la
+#               base sans gosu), .env (identifiants, non commité → .env.example)
+# Utilisé par : la commande docker compose up -d (exercice 1)
+# =============================================================================
 
+services:
+  # L'API Spring Boot (image JRE, utilisateur non root)
   app:
-    image: workshop-organizer
+    # Construit l'image avec le Dockerfile du dossier courant
+    build: .
+    # Nom de l'image construite (":local" = construite sur le poste, pas par la CI)
+    image: workshop-organizer:local
+    # Port de la machine : port du conteneur → http://localhost:8080
     ports:
       - "8080:8080"
+    # Connexion à la base, valeurs lues dans .env ("db" = nom du service ci-dessous)
+    # ":?" → Compose refuse de démarrer si la variable manque dans .env
     environment:
-      SPRING_DATASOURCE_URL: "jdbc:postgresql://db:5432/workshopsdb"
-      SPRING_DATASOURCE_USERNAME: workshops_user
-      SPRING_DATASOURCE_PASSWORD: oc2024
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://db:5432/${POSTGRES_DB:?is not set, see .env.example}"
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?is not set, see .env.example}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?is not set, see .env.example}
+    # Ordre de démarrage : l'API attend que la base soit PRÊTE (health check)
+    depends_on:
+      db:
+        condition: service_healthy
+    # Relance automatique en cas de plantage, sauf arrêt volontaire
+    restart: unless-stopped
 
+  # La base PostgreSQL : non publiée sur la machine, joignable par l'API seulement
   db:
-    image: postgres:13
-    environment:
-      POSTGRES_USER: workshops_user
-      POSTGRES_PASSWORD: oc2024
-      POSTGRES_DB: workshopsdb
+    # Notre image : l'officielle 18.6 sans gosu (database/Dockerfile)
+    build: ./database
+    image: workshop-organizer-db:18.6
+    # Création de l'utilisateur et de la base au 1er démarrage (POSTGRES_* du .env)
+    env_file: .env
+    # Persistance : les données vivent dans le volume, pas dans le conteneur
+    # (depuis PostgreSQL 18, on monte /var/lib/postgresql et non plus .../data)
+    volumes:
+      - db-data:/var/lib/postgresql
+    # Health check : "la base accepte-t-elle les connexions ?"
+    # "$$" → la variable est lue DANS le conteneur, pas par Compose
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+# Volume nommé géré par Docker : survit à "docker compose down" (pas à "down -v")
+volumes:
+  db-data:

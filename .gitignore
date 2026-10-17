@@ -39,3 +39,6 @@ out/
 ### OpenAPI Generator ###
 .openapi-generator/
 java-generated/
+
+### Secrets locaux (identifiants de la base) : jamais dans Git ###
+.env

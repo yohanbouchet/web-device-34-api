@@ -1,0 +1,41 @@
+# =============================================================================
+# Fichier     : .dockerignore
+# Rôle        : exclure du contexte de build Docker ce qui est inutile ou
+#               régénéré dans l'image (plus rapide, plus sûr, cache préservé)
+# Utilisé par : docker build (via le Dockerfile et docker-compose.yml)
+# =============================================================================
+
+# Régénérés pendant le build (Gradle, compilation, génération OpenAPI)
+.gradle
+build
+bin
+src/main/java-generated
+
+# Tests : ils ne tournent pas dans l'image (rôle de la CI)
+src/test
+test-results
+
+# Git, éditeurs, documentation, Kubernetes, scripts SQL
+.git
+.gitignore
+.vscode
+.idea
+*.iml
+HELP.md
+README.md
+k8s
+values.tpl.yaml
+db
+
+# Script Gradle pour Windows : inutile dans une image Linux
+gradlew.bat
+
+# Fichiers Docker eux-mêmes
+Dockerfile
+.dockerignore
+docker-compose.yml
+database
+
+# Secrets locaux : ne doivent JAMAIS entrer dans le contexte de build
+.env
+.env.example
