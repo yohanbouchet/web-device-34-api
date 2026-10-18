@@ -1,5 +1,7 @@
 # Workshop Organizer Web API
 
+[![pipeline status](https://gitlab.com/web-device-34-bouchet/workshop-organizer-api/badges/main/pipeline.svg)](https://gitlab.com/web-device-34-bouchet/workshop-organizer-api/-/pipelines?ref=main)
+
 Welcome to the Workshop Organizer Web API! This application is designed to facilitate workshops open to the public. Whether you’re organizing coding bootcamps, art classes, or any other type of workshop, this API will help manage registrations, schedules, and resources.
 
 ## Table of Contents
@@ -10,6 +12,8 @@ Welcome to the Workshop Organizer Web API! This application is designed to facil
 4. Testing
 5. Packaging
 6. Publishing to GitLab Registry
+7. Running with Docker Compose
+8. CI/CD pipeline (GitLab)
 
 ## Context
 
@@ -86,6 +90,9 @@ We take testing seriously! To verify the correctness of our application, run the
 
 During execution junit reports are generated in the `build/test-results/test` folder.
 
+In CI, tests run through `./scripts/run-tests.sh`, which copies these
+reports to `test-results/` (see [CI/CD pipeline](#cicd-pipeline-gitlab)).
+
 ## Packaging
 
 When you’re ready to package the application for deployment, create a deployable WAR file:
@@ -114,3 +121,41 @@ To publish your application to a GitLab registry, follow these steps:
    Remember to replace placeholders with actual values specific to your project.
 
 Feel free to enhance this README with additional details, such as API endpoints, security considerations, and deployment instructions. Happy organizing! 🚀
+
+## CI/CD pipeline (GitLab)
+
+The same `.gitlab-ci.yml` is used in both repositories (Workshop Organizer
+API and Olympic Participation Tracker). Each job only runs when the files of
+its project type exist (`rules: exists`), so the pipeline adapts itself.
+
+```mermaid
+flowchart LR
+  A[git push or merge request] --> B[test: scripts/run-tests.sh]
+  B --> C[JUnit report in the GitLab Tests tab]
+  B -.-> D[build: Docker image to Container Registry]
+  D -.-> E[release: semantic-release]
+```
+
+Dotted steps are planned and will be added next.
+
+- **Triggers**: every branch push and every merge request (no duplicate
+  pipeline when a merge request is open).
+- **Test report**: `test-results/*.xml` is published as a JUnit report and
+  kept even when tests fail (`artifacts: when: always`).
+- **Cache**: dependencies are cached between pipelines. Measured on the API:
+  Gradle tests went from 59 s to 17 s, and the whole pipeline from 1 min 32
+  to 51 s.
+
+### Configuration differences between the two projects
+
+| | Workshop Organizer API | Olympic Participation Tracker |
+|---|---|---|
+| Test job | `test:spring-boot` | `test:angular` |
+| Runs when | `gradlew` exists | `angular.json` exists |
+| CI image | `eclipse-temurin:21-jdk` | `node:24-bookworm-slim` + Chromium |
+| Test command (inside `run-tests.sh`) | `./gradlew clean test` | `npm test` (Karma, headless Chrome) |
+| Raw JUnit reports | `build/test-results/test/` | `reports/` |
+| Cache | `.gradle/` (key: `build.gradle` + Gradle wrapper version) | `.npm/` (key: `package-lock.json`) |
+
+Run the same tests locally with `./scripts/run-tests.sh` (exit code 0 = OK,
+1+ = failing tests, 2 = unknown project, 3 = missing tool, 4 = no report).
