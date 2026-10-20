@@ -14,6 +14,7 @@ Welcome to the Workshop Organizer Web API! This application is designed to facil
 6. Publishing to GitLab Registry
 7. Running with Docker Compose
 8. CI/CD pipeline (GitLab)
+9. Security
 
 ## Context
 
@@ -24,7 +25,7 @@ Workshops play a crucial role in fostering learning and collaboration. Our appli
 - **Java Development Kit (JDK):** We use **JDK 21**, tested with **Adoptium**, to power our application.
 - **Database:** Our backend relies on a **PostgreSQL 18** database for data storage.
 - **Build Tool:** We leverage **Gradle 8.7** for managing dependencies and building the project.
-- **Spring Boot:** Our application is based on **Spring Boot 3.2.4**, which provides a robust framework for creating RESTful APIs.
+- **Spring Boot:** Our application is based on **Spring Boot 3.5.16**, which provides a robust framework for creating RESTful APIs.
 - **Application Server:** Our application can run on Tomcat server that require version 10.1.24.
 
 ## Building and Running
@@ -189,3 +190,25 @@ Run the same checks locally:
   2 = unknown project, 3 = missing tool, 4 = no report);
 - `docker build -t my-image . && ./scripts/smoke-test.sh my-image`
   (exit code 0 = the image answers, 1 = it does not, 2 = unknown project).
+
+## Security
+
+Images and dependencies are checked with **trivy** (HIGH and CRITICAL
+vulnerabilities) and the Dockerfiles with **hadolint**.
+
+- **Dependency update (October 2026)**: Spring Boot 3.2.4 → 3.5.16 (latest
+  3.x), Tomcat 10.1.61 and Jackson 2.21.7 forced with `ext[...]` in
+  `build.gradle` (same major versions), PostgreSQL driver 42.7.14.
+  Result on the API image: **41 → 3** HIGH/CRITICAL vulnerabilities, tests and
+  smoke test unchanged.
+- **Remaining vulnerabilities**:
+  - 2 CRITICAL in `spring-webmvc` 6.2.19 (CVE-2026-47884, CVE-2026-47890):
+    only fixed in Spring Framework 7, which requires **Spring Boot 4**. All
+    Spring Boot 3.x versions are end of life (3.5 since 2026-06-30, see
+    endoflife.date). **Recommendation**: plan a migration to Spring Boot 4.
+  - 1 HIGH in `libexpat`, coming from the base image
+    (`eclipse-temurin:21-jre-alpine`): already fixed in Alpine, it will be
+    picked up by the next build (`docker build --pull`) once the official
+    image is updated.
+- **Containers**: the API and the local PostgreSQL run as non-root users; the
+  PostgreSQL image used by Docker Compose has no `gosu` (0 HIGH/CRITICAL).
