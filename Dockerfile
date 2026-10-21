@@ -29,15 +29,16 @@ RUN ./gradlew --no-daemon bootWar
 # JRE 21 : de quoi exécuter Java, sans le compilateur ni les outils du JDK
 FROM eclipse-temurin:21-jre-alpine
 
-# Sécurité : un utilisateur système dédié, sans droits root
-RUN addgroup -S app && adduser -S app -G app
+# Sécurité : un utilisateur système dédié, sans droits root, avec un numéro
+# FIXE (10001) : Kubernetes (runAsNonRoot) ne sait vérifier qu'un uid numérique
+RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
 WORKDIR /app
 
 # On ne récupère QUE l'archive de l'application (Tomcat est inclus dedans)
-COPY --from=build --chown=app:app /build/build/libs/*.war app.war
+COPY --from=build --chown=10001:10001 /build/build/libs/*.war app.war
 
 # L'API ne tourne pas en root
-USER app
+USER 10001:10001
 
 # Documentation : l'API écoute sur le port 8080
 EXPOSE 8080
