@@ -1,0 +1,19 @@
+# =============================================================================
+# Fichier     : k8s/pvc-db.yaml
+# Rôle        : demande de stockage persistant pour PostgreSQL : les données
+#               survivent à la suppression ou au redémarrage du Pod de la base
+# Utilise     : StorageClass par défaut de Minikube (standard, hostpath)
+# Utilisé par : deployment-db.yaml (volume monté sur /var/lib/postgresql)
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workshop-organizer-db-pvc
+spec:
+  # Un seul nœud à la fois peut écrire (une base = un seul serveur)
+  accessModes:
+    - ReadWriteOnce
+  # Taille demandée : largement suffisant pour l'exercice
+  resources:
+    requests:
+      storage: 1Gi

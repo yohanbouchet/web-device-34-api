@@ -1,3 +1,11 @@
+# =============================================================================
+# Fichier     : k8s/deployment-app.yaml
+# Rôle        : Deployment de l'API Spring Boot : 1 Pod (uid 10001), connecté
+#               à PostgreSQL par le Service de la base
+# Utilise     : Secret workshop-organizer-db-secret, Service
+#               workshop-organizer-db-service, Secret gitlab-registry
+# Utilisé par : Service workshop-organizer-app-service
+# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,19 +22,37 @@ spec:
     spec:
       containers:
       - name: workshop-organizer-app
-        # TODO: add the image of the application from the gitlab registry
+        # ① Image de l'API du registre GitLab, tag FIXE (SHA du commit de main)
+        image: registry.gitlab.com/web-device-34-bouchet/workshop-organizer-api:2028201e
         ports:
         - containerPort: 8080
         env:
         - name: SPRING_DATASOURCE_URL
-          # TODO: check the datasource URL
-          value: jdbc:postgresql://workshop-organizer-db:5432/workshop-organizer-database
+          # ② L'hôte est le NOM DU SERVICE de la base (l'annuaire DNS du
+          #   cluster), pas celui du Deployment : workshop-organizer-db-service
+          value: jdbc:postgresql://workshop-organizer-db-service:5432/workshop-organizer-database
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
               name: workshop-organizer-db-secret
               key: username
-        # TODO: add the spring database password environment variable 
-      # TODO: define imagePullSecrets to use a docker-registry secret and authorize Kubenetes 
-      # to pull images from private gitlab registry.
-      # I found this article to help you : https://medium.com/@stasko.lukasz/how-to-pull-docker-images-from-gitlab-container-registry-in-kubernetes-cluster-aae52787074a
+        # ③ Mot de passe lu dans le Secret (le même que celui de la base)
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workshop-organizer-db-secret
+              key: password
+        # Prête = l'API répond (même route que le smoke test de la CI)
+        readinessProbe:
+          httpGet:
+            path: /api/notions
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        # Sécurité : refuse root (image en uid 10001), pas d'élévation
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+      # ④ Identifiants du registre privé (deploy token en lecture seule)
+      imagePullSecrets:
+        - name: gitlab-registry
