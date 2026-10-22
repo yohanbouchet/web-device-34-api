@@ -1,0 +1,12 @@
+# =============================================================================
+# Fichier     : charts/workshop-api-chart/values-dev.yaml
+# Rôle        : valeurs de l'environnement DEV (seules les DIFFÉRENCES avec
+#               values.yaml) : dernières images publiées
+# Utilisé par : helm install … -n dev -f values-dev.yaml
+# =============================================================================
+app:
+  image:
+    tag: "latest"
+db:
+  image:
+    tag: "latest"
