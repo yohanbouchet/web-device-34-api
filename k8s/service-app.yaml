@@ -1,8 +1,17 @@
+# =============================================================================
+# Fichier     : k8s/service-app.yaml
+# Rôle        : Service de l'API : adresse fixe qui répartit le trafic vers les Pods
+#               portant le label app: workshop-organizer-app
+# Utilise     : Pods du Deployment workshop-organizer-app-deployment
+# Utilisé par : kubectl port-forward svc/workshop-organizer-app-service 8082:8080
+#               (LoadBalancer : IP externe seulement avec minikube tunnel)
+# =============================================================================
 apiVersion: v1
 kind: Service
 metadata:
   name: workshop-organizer-app-service
 spec:
+  # Doit correspondre aux labels du Pod (template du Deployment)
   selector:
     app: workshop-organizer-app
   ports:

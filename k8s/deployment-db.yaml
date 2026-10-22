@@ -1,9 +1,21 @@
+# =============================================================================
+# Fichier     : k8s/deployment-db.yaml
+# Rôle        : Deployment de PostgreSQL : 1 Pod, utilisateur postgres (70),
+#               identifiants lus dans le Secret, données sur le PVC
+# Utilise     : Secret workshop-organizer-db-secret, PVC
+#               workshop-organizer-db-pvc, Secret gitlab-registry
+# Utilisé par : Service workshop-organizer-db-service (joint par l'API)
+# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: workshop-organizer-db-deployment
 spec:
   replicas: 1
+  # Une base = un seul Pod : on ARRÊTE l'ancien avant de lancer le nouveau
+  # (deux PostgreSQL ne doivent jamais écrire dans le même volume)
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: workshop-organizer-db
@@ -12,17 +24,51 @@ spec:
       labels:
         app: workshop-organizer-db
     spec:
+      # Sécurité : tout le Pod tourne sous postgres (uid/gid 70, jamais root) ;
+      # fsGroup donne au groupe 70 le droit d'écrire dans le volume
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
       containers:
       - name: workshop-organizer-db
-      # TODO: add postgres image
+        # ① Notre image PostgreSQL 18.6 SANS gosu, publiée par la CI
+        #   (tag fixe = SHA du commit de main)
+        image: registry.gitlab.com/web-device-34-bouchet/workshop-organizer-api/postgres:2028201e
         env:
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
               name: workshop-organizer-db-secret
               key: username
-       # TODO: add the postgres password variable
+        # ② Mot de passe lu dans le MÊME Secret (jamais écrit en clair ici)
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workshop-organizer-db-secret
+              key: password
         - name: POSTGRES_DB
           value: workshop-organizer-database
         ports:
         - containerPort: 5432
+        # Prête = accepte les connexions (même test que le healthcheck du
+        # compose) : le Service n'envoie du trafic qu'à un Pod prêt
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\""]
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+        # Données sur le disque persistant (PostgreSQL 18 : /var/lib/postgresql)
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/postgresql
+      # Le disque persistant demandé par pvc-db.yaml
+      volumes:
+      - name: db-data
+        persistentVolumeClaim:
+          claimName: workshop-organizer-db-pvc
+      # Identifiants du registre privé (deploy token en lecture seule)
+      imagePullSecrets:
+        - name: gitlab-registry

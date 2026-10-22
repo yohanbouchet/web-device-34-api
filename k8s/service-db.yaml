@@ -1,12 +1,22 @@
+# =============================================================================
+# Fichier     : k8s/service-db.yaml
+# Rôle        : Service de la base : son NOM sert d'adresse DNS à l'API
+#               (jdbc:postgresql://workshop-organizer-db-service:5432/...)
+# Utilise     : Pod du Deployment workshop-organizer-db-deployment
+# Utilisé par : deployment-app.yaml (SPRING_DATASOURCE_URL)
+# =============================================================================
 apiVersion: v1
 kind: Service
 metadata:
   name: workshop-organizer-db-service
 spec:
+  # Doit correspondre aux labels du Pod (template du Deployment)
   selector:
     app: workshop-organizer-db
   ports:
     - protocol: TCP
       port: 5432
       targetPort: 5432
+  # Service « headless » : pas d'IP virtuelle, le nom DNS mène
+  # directement au Pod de la base (non exposé hors du cluster)
   clusterIP: None
