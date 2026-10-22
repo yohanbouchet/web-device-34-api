@@ -1,0 +1,31 @@
+# =============================================================================
+# Fichier     : charts/workshop-api-chart/values-staging.yaml
+# Rôle        : valeurs de l'environnement STAGING (seules les DIFFÉRENCES
+#               avec values.yaml) : versions figées, 2 Pods d'API, plus de
+#               ressources et de stockage
+# Utilisé par : helm install … -n staging -f values-staging.yaml
+# =============================================================================
+app:
+  # 2 Pods d'API (la base reste à 1 : elle ne se duplique pas)
+  replicaCount: 2
+  image:
+    tag: "0.3.0"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+db:
+  image:
+    tag: "0.3.0"
+  # Plus de place pour les données de test
+  storage: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
