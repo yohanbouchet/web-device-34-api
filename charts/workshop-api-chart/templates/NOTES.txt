@@ -1,0 +1,6 @@
+{{ .Release.Name }} (API + PostgreSQL) is deployed in namespace {{ .Release.Namespace }}.
+Test the API:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-app-service 8082:{{ .Values.app.port }}
+  curl http://localhost:8082/api/notions
+Upgrade WITHOUT changing the database password:
+  helm upgrade {{ .Release.Name }} <chart> -n {{ .Release.Namespace }} --reuse-values

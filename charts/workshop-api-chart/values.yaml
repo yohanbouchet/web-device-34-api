@@ -1,0 +1,47 @@
+# =============================================================================
+# Fichier     : charts/workshop-api-chart/values.yaml
+# Rôle        : valeurs PAR DÉFAUT du chart (cases à remplir des templates) ;
+#               un environnement les remplace avec -f values-<env>.yaml
+# Utilisé par : tous les fichiers de templates/
+# =============================================================================
+app:
+  # Nombre de Pods identiques de l'API
+  replicaCount: 1
+  image:
+    # Image du registre GitLab ; tag FIXE (SHA du commit de main)
+    repository: registry.gitlab.com/web-device-34-bouchet/workshop-organizer-api
+    tag: "5504d565"
+  # Port d'écoute de Spring Boot dans le conteneur
+  port: 8080
+  # Secret docker-registry créé à part dans le namespace (deploy token)
+  imagePullSecret: gitlab-registry
+  # "requests" = réservé, "limits" = plafond (mesuré : Java ~263 Mio)
+  resources:
+    requests:
+      cpu: 250m
+      memory: 384Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+db:
+  image:
+    # Notre PostgreSQL 18.6 sans gosu, publié par la CI
+    repository: registry.gitlab.com/web-device-34-bouchet/workshop-organizer-api/postgres
+    tag: "5504d565"
+  port: 5432
+  username: postgres
+  # VIDE exprès : jamais de mot de passe dans git. À fournir à l'installation :
+  #   --set db.password="$(head -c 18 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  password: ""
+  database: workshop-organizer-database
+  # Taille du disque persistant (PersistentVolumeClaim)
+  storage: 1Gi
+  # (mesuré : PostgreSQL ~61 Mio)
+  resources:
+    requests:
+      cpu: 100m
+      memory: 96Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
