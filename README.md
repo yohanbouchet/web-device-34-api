@@ -14,7 +14,8 @@ Welcome to the Workshop Organizer Web API! This application is designed to facil
 6. Publishing to GitLab Registry
 7. Running with Docker Compose
 8. CI/CD pipeline (GitLab)
-9. Security
+9. Deployment on Kubernetes (Minikube + Helm)
+10. Security
 
 ## Context
 
@@ -200,9 +201,9 @@ green with "There are no relevant changes": nothing is published.
 
 **`scripts/release.py`** (Python 3, standard library only)
 
-| | |
+| Item | Details |
 |---|---|
-| Purpose | writes the new version in the project files before the release commit |
+| Purpose | writes the new version in the project files before the release commit (`package.json` + lock or `build.gradle`, and `appVersion` of `charts/*/Chart.yaml`) |
 | Called by | `@semantic-release/exec` (`prepareCmd` in `.releaserc.yml`) |
 | Usage | `python3 scripts/release.py <version>` (e.g. `0.2.5`) |
 | Detection | same rule as `run-tests.sh`: `gradlew` + `build.gradle` → Spring Boot, `package.json` + `angular.json` → Angular |
@@ -270,6 +271,132 @@ Run the same checks locally:
 - `python3 scripts/release.py 9.9.9` on a copy of the project, to see which
   file would be updated (do not commit it: versions are written by the
   release job only).
+
+## Deployment on Kubernetes (Minikube + Helm)
+
+The application runs on a local Kubernetes cluster (Minikube) in two
+environments, `dev` and `staging`, each in its own namespace.
+
+### Prerequisites
+
+| Tool | Version used | Check |
+|---|---|---|
+| Minikube (Docker driver) | 1.39 (Kubernetes 1.37) | `minikube status` |
+| kubectl | 1.37 | `kubectl version --client` |
+| Helm | 4.3 | `helm version` |
+
+```bash
+minikube start --driver=docker --cpus=4 --memory=6g   # after a reboot: minikube start
+kubectl create namespace dev
+kubectl create namespace staging
+```
+
+The images live in the **private** GitLab Container Registry. Each namespace
+gets its own read-only access: one GitLab **deploy token** per environment
+(scope `read_registry` only), stored as a `docker-registry` Secret named
+`gitlab-registry`. The token is typed without being displayed and is never
+committed:
+
+```bash
+read -rp "Deploy token username: " DT_USER
+read -rsp "Deploy token: " DT_PASS; echo
+kubectl -n dev create secret docker-registry gitlab-registry \
+  --docker-server=registry.gitlab.com \
+  --docker-username="$DT_USER" --docker-password="$DT_PASS"
+unset DT_USER DT_PASS
+# same for staging, with its own deploy token
+```
+
+### Raw manifests (`k8s/`)
+
+The `k8s/` folder holds the plain Kubernetes manifests (first deployment,
+kept as reference). The Helm chart below is built from them.
+
+| File | Resource |
+|---|---|
+| `k8s/deployment-db.yaml` | PostgreSQL Deployment (`Recreate`, uid 70, readiness probe `pg_isready`) |
+| `k8s/pvc-db.yaml` | PersistentVolumeClaim (1Gi): data survives Pod restarts |
+| `k8s/service-db.yaml` | headless Service: its name is the database host for the API |
+| `k8s/deployment-app.yaml` | API Deployment (uid 10001, readiness probe on `/api/notions`) |
+| `k8s/service-app.yaml` | API Service, port 8080 |
+| `k8s/secret.yaml.example` | **template only**, never applied (see below) |
+
+The database Secret is created with a random password, never written in git:
+
+```bash
+kubectl create secret generic workshop-organizer-db-secret \
+  --from-literal=username=postgres \
+  --from-literal=password="$(head -c 18 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+```
+
+### Helm chart (`charts/workshop-api-chart`)
+
+The API and its PostgreSQL database are deployed by the same chart.
+
+```
+charts/workshop-api-chart/
+├── Chart.yaml            chart version + appVersion (synced by release.py)
+├── values.yaml           default values (db.password is empty on purpose)
+├── values-dev.yaml       dev overrides
+├── values-staging.yaml   staging overrides
+└── templates/            deployment-app/db, service-app/db, pvc-db,
+                          secret, NOTES.txt
+```
+
+The chart creates the database Secret from `db.password`. The value is
+**required** (`helm install` fails without it) and is generated at install
+time, so each environment has its own password:
+
+```bash
+helm install workshop-organizer charts/workshop-api-chart -n dev \
+  -f charts/workshop-api-chart/values-dev.yaml --wait --timeout 5m \
+  --set db.password="$(head -c 18 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+```
+
+PostgreSQL only reads the password when the database is first created. To
+upgrade a release **without changing the password**, reuse the stored values:
+
+```bash
+helm upgrade workshop-organizer charts/workshop-api-chart -n dev \
+  --reuse-values --wait
+```
+
+### Environments
+
+| Setting | dev | staging |
+|---|---|---|
+| Namespace | `dev` | `staging` |
+| API replicas | 1 | 2 |
+| Database replicas | 1 | 1 (a database is not scaled with replicas) |
+| API and database image tags | `latest` (last release) | `0.3.0` (fixed semantic version) |
+| API CPU request / limit | 250m / 1 | 500m / 1 |
+| API memory request / limit | 384Mi / 512Mi | 512Mi / 768Mi |
+| Database memory request / limit | 96Mi / 256Mi | 128Mi / 256Mi |
+| Database storage (PVC) | 1Gi | 2Gi |
+| Database password | random, set at install | another random one |
+| Registry access | deploy token `minikube-pull-dev` | deploy token `minikube-pull-staging` |
+
+Test the API:
+
+```bash
+kubectl -n dev port-forward svc/workshop-organizer-app-service 8082:8080
+curl http://localhost:8082/api/notions
+```
+
+Read the database password (cluster administrators only):
+
+```bash
+kubectl -n dev get secret workshop-organizer-db-secret \
+  -o jsonpath='{.data.password}' | base64 -d
+```
+
+### Kubernetes security
+
+- Containers refuse to start as root (`runAsNonRoot`) and cannot gain
+  privileges (`allowPrivilegeEscalation: false`); images use numeric users.
+- No credential is committed: registry tokens and database passwords are
+  created in the cluster, one per environment.
+- The database is only reachable inside the cluster (headless Service).
 
 ## Security
 
