@@ -1,0 +1,15 @@
+# =============================================================================
+# Fichier     : charts/workshop-api-chart/Chart.yaml
+# Rôle        : carte d'identité du chart Helm de l'API Spring Boot et de sa
+#               base PostgreSQL (les deux dans le même chart)
+# Utilisé par : helm lint / helm install (dossier charts/workshop-api-chart)
+# =============================================================================
+apiVersion: v2
+name: workshop-api-chart
+description: Workshop Organizer Web API (Spring Boot) with its PostgreSQL database
+# "application" : le chart déploie une appli (≠ "library", boîte à outils)
+type: application
+# Version du CHART (à augmenter quand les templates changent)
+version: 0.1.0
+# Version de l'APPLICATION livrée (dernière release semantic-release)
+appVersion: "0.2.5"

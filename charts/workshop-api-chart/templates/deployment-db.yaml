@@ -1,0 +1,65 @@
+# =============================================================================
+# Fichier     : charts/workshop-api-chart/templates/deployment-db.yaml
+# Rôle        : Deployment de PostgreSQL (repris de k8s/deployment-db.yaml)
+# Utilise     : values.yaml (.Values.db), Secret et PVC de la même release
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-db-deployment
+spec:
+  replicas: 1
+  # Une base = un seul Pod : on ARRÊTE l'ancien avant de lancer le nouveau
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-db
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-db
+    spec:
+      # Sécurité : tout le Pod sous postgres (uid/gid 70), accès au volume
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+      containers:
+      - name: {{ .Release.Name }}-db
+        image: "{{ .Values.db.image.repository }}:{{ .Values.db.image.tag }}"
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-db-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-db-secret
+              key: password
+        - name: POSTGRES_DB
+          value: {{ .Values.db.database | quote }}
+        ports:
+        - containerPort: {{ .Values.db.port }}
+        # Prête = accepte les connexions
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\""]
+          periodSeconds: 5
+        resources:
+          {{- toYaml .Values.db.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+        # Données sur le disque persistant (PostgreSQL 18 : /var/lib/postgresql)
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/postgresql
+      volumes:
+      - name: db-data
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-db-pvc
+      imagePullSecrets:
+        - name: {{ .Values.app.imagePullSecret }}

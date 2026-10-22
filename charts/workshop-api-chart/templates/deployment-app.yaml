@@ -1,0 +1,54 @@
+# =============================================================================
+# Fichier     : charts/workshop-api-chart/templates/deployment-app.yaml
+# Rôle        : Deployment de l'API (repris de k8s/deployment-app.yaml)
+# Utilise     : values.yaml (.Values.app, .Values.db), Secret et Service de
+#               la base de la même release
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-app-deployment
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-app
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-app
+    spec:
+      containers:
+      - name: {{ .Release.Name }}-app
+        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+        ports:
+        - containerPort: {{ .Values.app.port }}
+        env:
+        # Hôte = NOM DU SERVICE de la base de cette release
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://{{ .Release.Name }}-db-service:{{ .Values.db.port }}/{{ .Values.db.database }}"
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-db-secret
+              key: username
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-db-secret
+              key: password
+        # Prête = l'API répond (même route que le smoke test de la CI)
+        readinessProbe:
+          httpGet:
+            path: /api/notions
+            port: {{ .Values.app.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          {{- toYaml .Values.app.resources | nindent 10 }}
+        # Sécurité : refuse root (image en uid 10001), pas d'élévation
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+      imagePullSecrets:
+        - name: {{ .Values.app.imagePullSecret }}

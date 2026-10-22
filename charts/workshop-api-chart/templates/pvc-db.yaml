@@ -1,0 +1,17 @@
+# =============================================================================
+# Fichier     : charts/workshop-api-chart/templates/pvc-db.yaml
+# Rôle        : stockage persistant de PostgreSQL (repris de k8s/pvc-db.yaml)
+# Utilise     : values.yaml (.Values.db.storage)
+# Utilisé par : templates/deployment-db.yaml
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-db-pvc
+spec:
+  # Un seul nœud à la fois peut écrire (une base = un seul serveur)
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.db.storage }}
