@@ -45,8 +45,13 @@ To compile and run the application locally, follow these steps:
    Execute the main method in the Application class from your IDE.
    Use the Spring Boot Gradle Plugin :
    ```bash
+   # the database password is never stored in the repository
+   read -rsp "Database password: " SPRING_DATASOURCE_PASSWORD; echo
+   export SPRING_DATASOURCE_PASSWORD
    ./gradlew bootRun
    ```
+   Without `SPRING_DATASOURCE_PASSWORD`, PostgreSQL rejects the connection
+   and the application does not start.
    For production, package the application as WAR and use a tomcat server
 
 ## Running with Docker Compose
