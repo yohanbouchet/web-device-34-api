@@ -16,6 +16,7 @@ Welcome to the Workshop Organizer Web API! This application is designed to facil
 8. CI/CD pipeline (GitLab)
 9. Deployment on Kubernetes (Minikube + Helm)
 10. Security
+11. Known limits and next steps
 
 ## Context
 
@@ -44,8 +45,13 @@ To compile and run the application locally, follow these steps:
    Execute the main method in the Application class from your IDE.
    Use the Spring Boot Gradle Plugin :
    ```bash
+   # the database password is never stored in the repository
+   read -rsp "Database password: " SPRING_DATASOURCE_PASSWORD; echo
+   export SPRING_DATASOURCE_PASSWORD
    ./gradlew bootRun
    ```
+   Without `SPRING_DATASOURCE_PASSWORD`, PostgreSQL rejects the connection
+   and the application does not start.
    For production, package the application as WAR and use a tomcat server
 
 ## Running with Docker Compose
@@ -131,15 +137,30 @@ API and Olympic Participation Tracker). Each job only runs when the files of
 its project type exist (`rules: exists`), so the pipeline adapts itself.
 
 ```mermaid
-flowchart LR
-  A[git push or merge request] --> B[test: scripts/run-tests.sh]
-  B --> C[JUnit report in the GitLab Tests tab]
-  B --> D[build: docker build + scripts/smoke-test.sh]
-  D --> E["push to the GitLab Container Registry (tags: branch, commit SHA)"]
-  E --> F["release on main, manual button: semantic-release"]
-  F --> G["commit chore(release), tag vX.Y.Z, GitLab Release"]
-  G --> H["tag pipeline: test + build (tags: X.Y.Z, latest)"]
+flowchart TB
+  A[git push or merge request] --> T
+  subgraph T [stage test]
+    direction LR
+    T1["unit tests: scripts/run-tests.sh (JUnit report)"]
+    T2["test:helm: helm lint + helm template"]
+  end
+  T --> B["build: docker build, smoke test, push to the GitLab registry (tags: commit SHA, branch)"]
+  B --> S
+  subgraph S [stage security]
+    direction LR
+    S1["hadolint: Dockerfiles"]
+    S2["trivy: published image, blocks on CRITICAL"]
+  end
+  S --> R["release on main, manual button: semantic-release (tag vX.Y.Z, GitLab Release)"]
+  R --> P["tag pipeline: same stages, images X.Y.Z + latest"]
+  P --> H["helm upgrade --install, from the workstation"]
+  H --> D["namespace dev (image latest)"]
+  H --> G["namespace staging (image X.Y.Z)"]
 ```
+
+On merge request pipelines, only the checks run (tests, `test:helm`,
+hadolint): images are built, scanned and published once per commit, on the
+branch or tag pipeline.
 
 - **Triggers**: every branch push, every merge request (no duplicate
   pipeline when a merge request is open) and every version tag `vX.Y.Z`.
@@ -160,10 +181,28 @@ flowchart LR
   | branch (e.g. `main`) | short commit SHA (`:3a979237`) | branch name (`:main`) |
   | version tag (e.g. `v1.2.3`) | semantic version (`:1.2.3`) | `:latest` |
 
+- **Helm chart check** (`test:helm`, every pipeline): `helm lint` with the
+  default, dev and staging values, then `helm template` renders all the
+  Kubernetes manifests. No cluster is needed: a broken chart is caught before
+  any deployment.
+- **Security** (stage `security`, see [Security](#security) for the results):
+
+  | Job | Tool | Checks | Fails the pipeline when |
+  |---|---|---|---|
+  | `security:hadolint` | hadolint 2.14.0 | Dockerfile good practices (starts at once, `needs: []`) | any finding |
+  | `security:trivy` | trivy 0.75.0 | the image just published: system packages and application libraries | a **CRITICAL** vulnerability remains |
+
+  HIGH vulnerabilities are listed in the job log and in the report
+  `trivy-security-trivy.txt` (job artifact, kept one week) but do not block.
+  A CRITICAL vulnerability that cannot be fixed yet can be accepted in a
+  `.trivyignore` file at the root of the repository, one CVE per line, with a
+  reason and an expiry date (`CVE-XXXX-YYYY exp:2026-12-31`): after that date
+  the pipeline fails again.
 - **Secrets**: the registry password is a temporary job token provided by
   GitLab, sent with `--password-stdin` (never printed) and removed at the end
-  of the job (`docker logout` in `after_script`). The release job uses the
-  `GITLAB_TOKEN` variable (see below).
+  of the job (`docker logout` in `after_script`); trivy reads the image with
+  the same temporary token. The release job uses the `GITLAB_TOKEN` variable
+  (see below).
 
 ### Releases (semantic-release)
 
@@ -242,7 +281,10 @@ with semantic-release 25), plugins `changelog`, `exec`, `git`, `gitlab`.
 | Test command (inside `run-tests.sh`) | `./gradlew clean test` | `npm test` (Karma, headless Chrome) |
 | Raw JUnit reports | `build/test-results/test/` | `reports/` |
 | Cache | `.gradle/` (key: `build.gradle` + Gradle wrapper version) | `.npm/` (key: `package-lock.json`) |
-| Build job | `build:image` (shared) | `build:image` (shared) |
+| Helm chart check | `test:helm` on `charts/workshop-api-chart` | `test:helm` on `charts/olympic-tracker-chart` |
+| Build job | `build:image` + `build:db-image` (PostgreSQL) | `build:image` (shared) |
+| Security jobs | `security:hadolint` (2 Dockerfiles), `security:trivy` + `security:trivy-db` | `security:hadolint`, `security:trivy` |
+| Accepted vulnerabilities | `.trivyignore`: 2 Spring CVEs until 2026-12-31 | none |
 | Docker image | multi-stage: JDK 21 + Gradle, then JRE 21 (WAR) | multi-stage: Node 24, then Nginx 1.30 |
 | Smoke test (inside `smoke-test.sh`) | API + temporary PostgreSQL, `GET /api/notions` | Nginx, `GET /` |
 | Version file (synced by `release.py`) | `build.gradle` (`version = '…'`) | `package.json` + `package-lock.json` |
@@ -270,7 +312,20 @@ Run the same checks locally:
   (exit code 0 = the image answers, 1 = it does not, 2 = unknown project);
 - `python3 scripts/release.py 9.9.9` on a copy of the project, to see which
   file would be updated (do not commit it: versions are written by the
-  release job only).
+  release job only);
+- the CI security and chart checks, with the same pinned images (trivy reads
+  `.trivyignore` from the current folder):
+
+  ```bash
+  docker run --rm -i hadolint/hadolint:v2.14.0-alpine hadolint - < Dockerfile
+  docker run --rm -i hadolint/hadolint:v2.14.0-alpine hadolint - \
+    < database/Dockerfile
+  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "$PWD:/w:ro" -w /w \
+    aquasec/trivy:0.75.0 image --severity HIGH,CRITICAL my-image
+  helm lint charts/workshop-api-chart \
+    -f charts/workshop-api-chart/values-staging.yaml --set db.password=x
+  ```
 
 ## Deployment on Kubernetes (Minikube + Helm)
 
@@ -408,14 +463,35 @@ vulnerabilities) and the Dockerfiles with **hadolint**.
   `build.gradle` (same major versions), PostgreSQL driver 42.7.14.
   Result on the API image: **41 → 3** HIGH/CRITICAL vulnerabilities, tests and
   smoke test unchanged.
-- **Remaining vulnerabilities**:
-  - 2 CRITICAL in `spring-webmvc` 6.2.19 (CVE-2026-47884, CVE-2026-47890):
-    only fixed in Spring Framework 7, which requires **Spring Boot 4**. All
-    Spring Boot 3.x versions are end of life (3.5 since 2026-06-30, see
-    endoflife.date). **Recommendation**: plan a migration to Spring Boot 4.
-  - 1 HIGH in `libexpat`, coming from the base image
-    (`eclipse-temurin:21-jre-alpine`): already fixed in Alpine, it will be
-    picked up by the next build (`docker build --pull`) once the official
-    image is updated.
-- **Containers**: the API and the local PostgreSQL run as non-root users; the
-  PostgreSQL image used by Docker Compose has no `gosu` (0 HIGH/CRITICAL).
+- **Automated checks**: since 2026-10-24 every pipeline scans the API image
+  and the PostgreSQL image with trivy and fails on any CRITICAL
+  vulnerability (see [CI/CD pipeline](#cicd-pipeline-gitlab)).
+- **Accepted vulnerabilities** (`.trivyignore`, until 2026-12-31): 2
+  CRITICAL in `spring-webmvc` 6.2.19 (CVE-2026-47884, CVE-2026-47890), only
+  fixed in Spring Framework 7, which requires **Spring Boot 4**. Spring Boot
+  3.5 and Spring Framework 6.2 reached their end of support on 2026-06-30
+  (endoflife.date) and 6.2.19 is the last 6.2 version. Upgrading the
+  framework changes the application code, so it is a decision for the
+  development team. **Recommendation**: plan the migration to Spring Boot 4
+  before the exception expires; after 2026-12-31 the pipeline fails again.
+- **System packages**: on 2026-10-24 trivy reported 1 HIGH vulnerability in
+  `brotli-libs` (CVE-2026-111497) in both images, already fixed in Alpine
+  but not yet in the official images. The final stage of both Dockerfiles
+  now runs `apk upgrade --no-cache` (same Alpine release, fixes only).
+  Result: **0 HIGH, 0 CRITICAL** on both images (Spring CVEs excepted, see
+  above), smoke tests unchanged.
+- **Containers**: the API and the PostgreSQL image run as non-root users;
+  the PostgreSQL image has no `gosu`.
+
+## Known limits and next steps
+
+| Topic | Current state | Next step |
+|---|---|---|
+| Framework support | Spring Boot 3.5 is out of support; 2 CRITICAL CVEs accepted until 2026-12-31 | migrate to Spring Boot 4 (development team) |
+| Deployment | Helm releases are installed from the workstation on a local Minikube cluster; the CI cannot reach it | deployment job (`helm upgrade --install`) to a shared cluster, with an environment per namespace |
+| Database account | the application connects with the superuser account created by the PostgreSQL image (`POSTGRES_USER`) | dedicated account with only the rights the application needs |
+| Database backup | data kept in a PersistentVolumeClaim, no scheduled backup | scheduled `pg_dump` (Kubernetes CronJob) to external storage, with a tested restore |
+| Image reproducibility | `apk upgrade` at build time: two builds of the same commit can contain different (patched) system packages | accepted for security; images are traceable by their commit SHA tag |
+| Dependency updates | detected by trivy, updated by hand | Renovate bot opening update merge requests |
+| Kubernetes health | readiness probes (`GET /api/notions`, `pg_isready`) | liveness probes, NetworkPolicy (needs a CNI that enforces it) |
+| Supply chain | images tagged and scanned | image signing (cosign) and SBOM |

@@ -25,7 +25,6 @@ test-results
 HELP.md
 README.md
 k8s
-values.tpl.yaml
 db
 
 # Script Gradle pour Windows : inutile dans une image Linux

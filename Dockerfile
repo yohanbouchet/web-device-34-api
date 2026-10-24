@@ -29,6 +29,10 @@ RUN ./gradlew --no-daemon bootWar
 # JRE 21 : de quoi exécuter Java, sans le compilateur ni les outils du JDK
 FROM eclipse-temurin:21-jre-alpine
 
+# Sécurité : applique les correctifs Alpine publiés depuis la sortie de
+# l'image officielle (même version d'Alpine, correctifs seulement)
+RUN apk upgrade --no-cache
+
 # Sécurité : un utilisateur système dédié, sans droits root, avec un numéro
 # FIXE (10001) : Kubernetes (runAsNonRoot) ne sait vérifier qu'un uid numérique
 RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app

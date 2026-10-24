@@ -16,8 +16,11 @@
 #  la 13 fournie est en fin de vie)
 FROM postgres:18.6-alpine3.24
 
-# Suppression de gosu (inutile sans démarrage en root)
-RUN rm /usr/local/bin/gosu
+# Sécurité : applique les correctifs Alpine publiés depuis la sortie de
+# l'image officielle (même version d'Alpine, correctifs seulement), puis
+# supprime gosu (inutile sans démarrage en root)
+RUN apk upgrade --no-cache \
+    && rm /usr/local/bin/gosu
 
 # Utilisateur postgres de l'image, désigné par son numéro (70) : le script de
 # démarrage, lancé sans root, n'appelle pas gosu
