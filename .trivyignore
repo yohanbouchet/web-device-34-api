@@ -3,12 +3,10 @@
 # Rôle        : dérogations DATÉES aux failles détectées par trivy (jobs
 #               security:trivy du pipeline). Une ligne = une CVE ; après la
 #               date "exp:", la dérogation tombe et le job redevient rouge.
+#               Format : CVE-AAAA-NNNNN exp:AAAA-MM-JJ, précédé de la raison.
 # Utilisé par : .gitlab-ci.yml (trivy lit ce fichier à la racine du dépôt)
 # =============================================================================
 
-# spring-webmvc 6.2.19 : correctif seulement dans Spring Framework 7
-# (Spring Boot 4). Spring Boot 3.5 n'est plus maintenu depuis le 30/06/2026
-# (endoflife.date). Migration à décider par le client ; à revoir avant le
-# 31/12/2026.
-CVE-2026-47884 exp:2026-12-31
-CVE-2026-47890 exp:2026-12-31
+# Aucune dérogation en cours. Les 2 CVE de spring-webmvc 6.2.19
+# (CVE-2026-47884, CVE-2026-47890), acceptées jusqu'au 31/12/2026, sont
+# corrigées par la migration vers Spring Boot 4.1.2 (ticket #1, 25/10/2026).
