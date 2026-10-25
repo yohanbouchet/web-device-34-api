@@ -9,7 +9,7 @@ app:
   # 2 Pods d'API (la base reste à 1 : elle ne se duplique pas)
   replicaCount: 2
   image:
-    tag: "0.3.0"
+    tag: "0.4.0"
   resources:
     requests:
       cpu: 500m
@@ -19,7 +19,7 @@ app:
       memory: 768Mi
 db:
   image:
-    tag: "0.3.0"
+    tag: "0.4.0"
   # Plus de place pour les données de test
   storage: 2Gi
   resources:
