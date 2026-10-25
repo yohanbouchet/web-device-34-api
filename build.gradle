@@ -100,3 +100,5 @@ publishing {
 // récentes que celles fournies par Spring Boot 3.5.16 (Tomcat et Jackson)
 ext['tomcat.version'] = '10.1.61'
 ext['jackson-bom.version'] = '2.21.7'
+// log4j-api 2.25.5 : corrige CVE-2026-49844 (Spring Boot 3.5.16 fournit 2.24.3)
+ext['log4j2.version'] = '2.25.5'
