@@ -26,9 +26,9 @@ Workshops play a crucial role in fostering learning and collaboration. Our appli
 
 - **Java Development Kit (JDK):** We use **JDK 21**, tested with **Adoptium**, to power our application.
 - **Database:** Our backend relies on a **PostgreSQL 18** database for data storage.
-- **Build Tool:** We leverage **Gradle 8.7** for managing dependencies and building the project.
-- **Spring Boot:** Our application is based on **Spring Boot 3.5.16**, which provides a robust framework for creating RESTful APIs.
-- **Application Server:** Our application can run on Tomcat server that require version 10.1.24.
+- **Build Tool:** We leverage **Gradle 9.8.2** (wrapper) for managing dependencies and building the project.
+- **Spring Boot:** Our application is based on **Spring Boot 4.1.2** (Spring Framework 7, Jackson 3), which provides a robust framework for creating RESTful APIs.
+- **Application Server:** Our application runs on the embedded Tomcat 11 (11.0.27); an external server must be Tomcat 11 or later.
 
 ## Building and Running
 
@@ -289,7 +289,7 @@ with semantic-release 25), plugins `changelog`, `exec`, `git`, `gitlab`.
 | Helm chart check | `test:helm` on `charts/workshop-api-chart` | `test:helm` on `charts/olympic-tracker-chart` |
 | Build job | `build:image` + `build:db-image` (PostgreSQL) | `build:image` (shared) |
 | Security jobs | `security:hadolint` (2 Dockerfiles), `security:trivy` + `security:trivy-db` | `security:hadolint`, `security:trivy` |
-| Accepted vulnerabilities | `.trivyignore`: 2 Spring CVEs until 2026-12-31 | none |
+| Accepted vulnerabilities | none (the 2 Spring CVEs were fixed by Spring Boot 4 on 2026-10-25) | none |
 | Docker image | multi-stage: JDK 21 + Gradle, then JRE 21 (WAR) | multi-stage: Node 24, then Nginx 1.30 |
 | Smoke test (inside `smoke-test.sh`) | API + temporary PostgreSQL, `GET /api/notions` | Nginx, `GET /` |
 | Version file (synced by `release.py`) | `build.gradle` (`version = '…'`) | `package.json` + `package-lock.json` |
@@ -471,20 +471,24 @@ vulnerabilities) and the Dockerfiles with **hadolint**.
 - **Automated checks**: since 2026-10-24 every pipeline scans the API image
   and the PostgreSQL image with trivy and fails on any CRITICAL
   vulnerability (see [CI/CD pipeline](#cicd-pipeline-gitlab)).
-- **Accepted vulnerabilities** (`.trivyignore`, until 2026-12-31): 2
-  CRITICAL in `spring-webmvc` 6.2.19 (CVE-2026-47884, CVE-2026-47890), only
-  fixed in Spring Framework 7, which requires **Spring Boot 4**. Spring Boot
-  3.5 and Spring Framework 6.2 reached their end of support on 2026-06-30
-  (endoflife.date) and 6.2.19 is the last 6.2 version. Upgrading the
-  framework changes the application code, so it is a decision for the
-  development team. **Recommendation**: plan the migration to Spring Boot 4
-  before the exception expires; after 2026-12-31 the pipeline fails again.
+- **Spring Boot 4 migration (2026-10-25, issue #1)**: the pipeline had
+  found 2 CRITICAL in `spring-webmvc` 6.2.19 (CVE-2026-47884,
+  CVE-2026-47890), only fixed in Spring Framework 7; Spring Boot 3.5 reached
+  its end of support on 2026-06-30 (endoflife.date). They were first
+  accepted in `.trivyignore` with an expiry date, then fixed by the
+  migration to **Spring Boot 4.1.2** (Gradle 9.8.2, OpenAPI generator
+  7.14.0). Six contract tests on the 5 routes were written **before** the
+  migration and pass before and after; real HTTP responses with a database
+  are identical. `.trivyignore` is now empty.
+- **log4j (2026-10-25, issue #2)**: CVE-2026-49844 (MEDIUM) in `log4j-api`
+  2.24.3, fixed with 2.25.5, now provided by Spring Boot 4.1.2.
 - **System packages**: on 2026-10-24 trivy reported 1 HIGH vulnerability in
   `brotli-libs` (CVE-2026-111497) in both images, already fixed in Alpine
   but not yet in the official images. The final stage of both Dockerfiles
   now runs `apk upgrade --no-cache` (same Alpine release, fixes only).
-  Result: **0 HIGH, 0 CRITICAL** on both images (Spring CVEs excepted, see
-  above), smoke tests unchanged.
+  Result: **0 HIGH, 0 CRITICAL** on both images, smoke tests unchanged.
+- **Current state (2026-10-25)**: trivy reports **0 vulnerability** of any
+  severity on the API image and on the PostgreSQL image, without exception.
 - **Containers**: the API and the PostgreSQL image run as non-root users;
   the PostgreSQL image has no `gosu`.
 
@@ -492,7 +496,9 @@ vulnerabilities) and the Dockerfiles with **hadolint**.
 
 | Topic | Current state | Next step |
 |---|---|---|
-| Framework support | Spring Boot 3.5 is out of support; 2 CRITICAL CVEs accepted until 2026-12-31 | migrate to Spring Boot 4 (development team) |
+| Framework support | Spring Boot 4.1 is supported until 2027-07-31 (endoflife.date) | follow the 4.x patch releases, plan 4.2 |
+| API behaviour | `GET /api/workshops/{id}` answers 200 instead of 404 for an unknown id (existing behaviour, kept by the migration) | return 404 with the `Error` schema of the OpenAPI specification |
+| Configuration | 3 deprecated Hibernate settings in `application.properties` (startup warnings) | remove them |
 | Deployment | Helm releases are installed from the workstation on a local Minikube cluster; the CI cannot reach it | deployment job (`helm upgrade --install`) to a shared cluster, with an environment per namespace |
 | Database account | the application connects with the superuser account created by the PostgreSQL image (`POSTGRES_USER`) | dedicated account with only the rights the application needs |
 | Database backup | data kept in a PersistentVolumeClaim, no scheduled backup | scheduled `pg_dump` (Kubernetes CronJob) to external storage, with a tested restore |
