@@ -96,6 +96,11 @@ We take testing seriously! To verify the correctness of our application, run the
 ./gradlew clean test
 ```
 
+The suite has 8 tests: 2 unit tests of the services, and 6 **contract
+tests** (`ApiContractTest`) that send real HTTP requests to the 5 routes and
+compare the JSON responses exactly. They were written before the Spring Boot
+4 migration and guarantee that the API contract does not change.
+
 During execution junit reports are generated in the `build/test-results/test` folder.
 
 In CI, tests run through `./scripts/run-tests.sh`, which copies these
@@ -295,7 +300,7 @@ with semantic-release 25), plugins `changelog`, `exec`, `git`, `gitlab`.
 | Version file (synced by `release.py`) | `build.gradle` (`version = '…'`) | `package.json` + `package-lock.json` |
 | First version released | 0.2.5 (starting tag `v0.2.4`) | 0.1.4 (starting tag `v0.1.3`) |
 | Registry image | `registry.gitlab.com/web-device-34-bouchet/workshop-organizer-api` | `registry.gitlab.com/web-device-34-bouchet/olympic-participation-tracker` |
-| Compressed image size | 122.6 MB | 28.6 MB |
+| Compressed image size (registry) | 129.4 MB (0.4.0) | 26.6 MB (0.3.0) |
 
 ### Differences between local and CI environments
 
@@ -428,7 +433,7 @@ helm upgrade workshop-organizer charts/workshop-api-chart -n dev \
 | Namespace | `dev` | `staging` |
 | API replicas | 1 | 2 |
 | Database replicas | 1 | 1 (a database is not scaled with replicas) |
-| API and database image tags | `latest` (last release) | `0.3.0` (fixed semantic version) |
+| API and database image tags | `latest` (last release) | `0.4.0` (fixed semantic version) |
 | API CPU request / limit | 250m / 1 | 500m / 1 |
 | API memory request / limit | 384Mi / 512Mi | 512Mi / 768Mi |
 | Database memory request / limit | 96Mi / 256Mi | 128Mi / 256Mi |
